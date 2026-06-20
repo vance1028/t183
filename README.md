@@ -1,57 +1,169 @@
-# React + TypeScript + Vite
+# 潜水减压计划工具
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+基于 Buhlmann ZH-L16C 减压模型的浏览器端潜水减压计划工具，用于教学演示和潜水规划参考。
 
-Currently, two official plugins are available:
+## 功能特性
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+- **多段潜水计划管理**：支持多段潜水、目标深度、停留时间、水面间歇设置
+- **Buhlmann ZH-L16C 模型**：16 个并行组织舱，完整的气体加载和脱饱和计算
+- **免减压极限 (NDL)**：实时计算当前深度的免减压极限时间
+- **减压停留计算**：自动计算所需的减压停留深度和时间
+- **上升速率校验**：休闲潜水 9m/min，技术潜水 6m/min
+- **多段残留衔接**：前一段潜水的组织张力作为下一段的初始状态
+- **可视化图表**：
+  - 深度-时间剖面图
+  - 16 个组织舱惰性气体张力曲线
+  - M 值极限线（点击图例高亮单条曲线查看对应 M 值）
+- **数据持久化**：localStorage 自动保存，支持 JSON 导入/导出
+- **内置示例数据**：一键加载典型潜水剖面
 
-## Expanding the ESLint configuration
+## 技术栈
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
+- React 18 + TypeScript
+- Vite 6（开发端口：6951）
+- Zustand 状态管理
+- Recharts 图表库
+- Tailwind CSS 3
+- Vitest 测试框架
 
-```js
-export default tseslint.config({
-  extends: [
-    // Remove ...tseslint.configs.recommended and replace with this
-    ...tseslint.configs.recommendedTypeChecked,
-    // Alternatively, use this for stricter rules
-    ...tseslint.configs.strictTypeChecked,
-    // Optionally, add this for stylistic rules
-    ...tseslint.configs.stylisticTypeChecked,
-  ],
-  languageOptions: {
-    // other options...
-    parserOptions: {
-      project: ['./tsconfig.node.json', './tsconfig.app.json'],
-      tsconfigRootDir: import.meta.dirname,
-    },
-  },
-})
+## 快速开始
+
+### 安装依赖
+
+```bash
+npm install
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+### 开发模式
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+```bash
+npm run dev
+```
 
-export default tseslint.config({
-  extends: [
-    // other configs...
-    // Enable lint rules for React
-    reactX.configs['recommended-typescript'],
-    // Enable lint rules for React DOM
-    reactDom.configs.recommended,
-  ],
-  languageOptions: {
-    // other options...
-    parserOptions: {
-      project: ['./tsconfig.node.json', './tsconfig.app.json'],
-      tsconfigRootDir: import.meta.dirname,
-    },
-  },
-})
+访问 `http://localhost:6951`
+
+### 构建生产版本
+
+```bash
+npm run build
+```
+
+### 运行测试
+
+```bash
+npm test
+```
+
+### 代码检查
+
+```bash
+npm run lint
+npm run check
+```
+
+## 使用说明
+
+### 1. 创建潜水计划
+
+在左侧「潜水段」面板中：
+- 点击「添加潜水段」增加新的潜水段
+- 设置每段的**目标深度**（米）和**水底时间**（分钟）
+- 设置与下一段之间的**水面间歇**（分钟）
+
+### 2. 查看关键指标
+
+右上方面板显示实时计算结果：
+- **NDL 余量**：当前深度还能停留的免减压时间
+- **总运行时间**：从开始下潜到最后返回水面的总时间
+- **总水底时间**：各段水底时间之和
+- **最大气体负荷**：组织过饱和度的最大值（>100% 表示有减压病风险）
+- **上升速率**：实际最大上升速率
+
+### 3. 减压停留
+
+减压停留列表显示：
+- **强制减压站**（红色）：必须停留的深度和时间
+- **安全停留**（青色）：建议的安全停留（通常 5 米 3 分钟）
+- 点击「折叠」按钮可收起长列表，避免挤压下方图表
+
+### 4. 图表解读
+
+#### 深度-时间剖面图
+- 横轴：时间（分钟）
+- 纵轴：深度（米，向下为正）
+- 不同颜色表示不同阶段：下潜、水底、上升、减压停留、水面间歇
+
+#### 组织舱张力图
+- 显示 6 个关键组织舱的 N₂ 张力变化（可切换显示全部 16 舱）
+- 点击图例可高亮单条曲线，同时显示对应的 **M 值极限线**（青色虚线）
+- 张力超过 M 值极限线表示有减压病风险
+- 悬停查看具体数值：`当前张力 / M值上限`
+
+### 5. 数据管理
+
+顶部工具栏：
+- **示例数据**：加载内置的多段潜水示例
+- **清空**：重置所有潜水段
+- **导入**：从 JSON 文件导入潜水计划
+- **导出 JSON**：将当前计划导出为 JSON 文件
+
+### 6. 典型剖面参考
+
+| 深度 | 免减压极限 (NDL) | 说明 |
+|------|------------------|------|
+| 10m | ∞ | 浅水区，理论上无免减压限制 |
+| 18m | ∞ | 休闲潜水常见深度 |
+| 25m | ~80 分钟 | |
+| 30m | ~29 分钟 | 需注意 NDL 余量 |
+| 40m | ~12 分钟 | 技术潜水范围，需减压 |
+
+## 计算模型说明
+
+### Buhlmann ZH-L16C 模型
+
+16 个组织舱，各有独立的半排期（4-635 分钟）和 M 值系数（a、b）。
+
+### M 值公式
+
+M 值表示该深度下组织舱允许的最大过压：
+```
+M(过压) = a + b × P_amb
+最大允许组织张力 = P_amb + M(过压) = a + (b+1) × P_amb
+```
+
+### Schreiner 方程
+
+用于线性压力变化（下潜/上升）时的组织张力计算：
+```
+P(t) = P_alv + R×(t - 1/k) + (P0 - P_alv + R/k) × e^(-kt)
+```
+
+### 减压停留算法
+
+1. 从水底开始，逐层 3 米上升
+2. 每层使用二分搜索确定所需停留时间
+3. 仅要求能安全上升到下一层（而非直接到表面）
+4. 上升过程分步检查（10+ 步），确保每一点张力 ≤ 该深度 M 值
+
+## 免责声明
+
+本工具基于 Buhlmann ZH-L16C 减压模型用于**教学演示和规划参考**，计算结果偏保守。
+
+**实际潜水请遵循您所接受训练体系的潜水表和潜水电脑的指示。所有潜水都存在风险，请务必在能力范围内进行并保持足够的安全余量。**
+
+## 项目结构
+
+```
+src/
+├── core/               # 核心计算逻辑（与 UI 严格分离）
+│   ├── tissueModel.ts   # 组织舱模型、M 值计算
+│   ├── ndlCalculator.ts # NDL、减压停留计算
+│   ├── ascentValidator.ts # 上升速率校验
+│   ├── index.ts         # 主计算管线
+│   └── types.ts         # 类型定义
+├── components/         # React 组件
+├── store/              # Zustand 状态管理
+├── utils/              # 工具函数
+├── tests/              # 测试用例
+└── App.tsx             # 主应用
 ```

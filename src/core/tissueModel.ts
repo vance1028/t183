@@ -102,7 +102,8 @@ export function calculateMValue(
 ): number {
   const comp = BUHLMANN_ZHL16C[compartmentIndex];
   const P_amb = depthToPressure(depth_m);
-  return comp.aMvalue + P_amb * comp.bMvalue;
+  const overpressureM = comp.aMvalue + P_amb * comp.bMvalue;
+  return P_amb + overpressureM;
 }
 
 export function compartmentSuperSaturationRatio(

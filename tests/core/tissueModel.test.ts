@@ -104,10 +104,11 @@ describe('tissueModel - 恒定深度张力变化', () => {
 });
 
 describe('tissueModel - M 值', () => {
-  it('表面 M 值应等于 a + b', () => {
+  it('表面最大允许组织张力应等于 P_amb + (a + b * P_amb)', () => {
+    const P_amb_surface = 1.0;
     for (let i = 0; i < NUM_COMPARTMENTS; i++) {
       const mVal = calculateMValue(i, 0);
-      const expected = BUHLMANN_ZHL16C[i].aMvalue + BUHLMANN_ZHL16C[i].bMvalue * 1.0;
+      const expected = P_amb_surface + (BUHLMANN_ZHL16C[i].aMvalue + BUHLMANN_ZHL16C[i].bMvalue * P_amb_surface);
       expect(mVal).toBeCloseTo(expected, 5);
     }
   });

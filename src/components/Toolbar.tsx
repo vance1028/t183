@@ -3,7 +3,6 @@ import {
   Download,
   Upload,
   RotateCcw,
-  Plus,
   Trash2,
   Waves,
 } from 'lucide-react';

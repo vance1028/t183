@@ -5,7 +5,6 @@ import {
   compartmentK,
   calculateMValue,
   compartmentSuperSaturationRatio,
-  leadingCompartmentIndex,
   constantDepthTensionChange,
   linearDepthChangeTensions,
 } from './tissueModel';
@@ -16,54 +15,76 @@ import {
   SAFE_ASCENT_RATE_RECREATIONAL_m_per_min,
 } from './types';
 
-function surfaceTensionAfterAscent(
-  bottomTension: number,
+function tensionAfterAscent(
+  startTension: number,
   compartmentIndex: number,
-  bottomDepth_m: number,
+  startDepth_m: number,
+  endDepth_m: number,
   ascentRate_m_per_min: number
 ): number {
-  const duration = bottomDepth_m / ascentRate_m_per_min;
-  if (duration <= 0) return bottomTension;
+  const depthChange = startDepth_m - endDepth_m;
+  const duration = depthChange / ascentRate_m_per_min;
+  if (duration <= 0) return startTension;
   const k = compartmentK(BUHLMANN_ZHL16C[compartmentIndex].halfLife_min);
-  const P_alv_start = ambientN2Pressure(bottomDepth_m);
-  const P_alv_end = ambientN2Pressure(0);
+  const P_alv_start = ambientN2Pressure(startDepth_m);
+  const P_alv_end = ambientN2Pressure(endDepth_m);
   const R = (P_alv_end - P_alv_start) / duration;
 
   const exp_kt = Math.exp(-k * duration);
   return (
     P_alv_start +
     R * (duration - 1 / k) +
-    (bottomTension - P_alv_start + R / k) * exp_kt
+    (startTension - P_alv_start + R / k) * exp_kt
   );
 }
 
-function compartmentCanSurfaceSafely(
-  bottomTension: number,
+function compartmentCanAscendTo(
+  startTension: number,
   compartmentIndex: number,
-  bottomDepth_m: number,
+  startDepth_m: number,
+  endDepth_m: number,
   ascentRate_m_per_min: number
 ): boolean {
-  const surfaceTension = surfaceTensionAfterAscent(
-    bottomTension,
-    compartmentIndex,
-    bottomDepth_m,
-    ascentRate_m_per_min
-  );
-  const surfaceMValue = calculateMValue(compartmentIndex, 0);
-  return surfaceTension <= surfaceMValue + 1e-6;
+  const depthChange = startDepth_m - endDepth_m;
+  const duration = depthChange / ascentRate_m_per_min;
+  if (duration <= 0) return true;
+
+  const steps = Math.max(10, Math.ceil(duration * 10));
+  const depthStep = depthChange / steps;
+  let tension = startTension;
+
+  for (let i = 1; i <= steps; i++) {
+    const currentDepth = startDepth_m - depthStep * i;
+    const prevDepth = startDepth_m - depthStep * (i - 1);
+    tension = tensionAfterAscent(
+      tension,
+      compartmentIndex,
+      prevDepth,
+      currentDepth,
+      ascentRate_m_per_min
+    );
+    const mValue = calculateMValue(compartmentIndex, currentDepth);
+    if (tension > mValue + 1e-6) {
+      return false;
+    }
+  }
+
+  return true;
 }
 
-function canDiveSurfaceSafely(
-  bottomTensions: number[],
-  bottomDepth_m: number,
+function canAscendTo(
+  tensions: number[],
+  startDepth_m: number,
+  endDepth_m: number,
   ascentRate_m_per_min: number
 ): boolean {
   for (let i = 0; i < NUM_COMPARTMENTS; i++) {
     if (
-      !compartmentCanSurfaceSafely(
-        bottomTensions[i],
+      !compartmentCanAscendTo(
+        tensions[i],
         i,
-        bottomDepth_m,
+        startDepth_m,
+        endDepth_m,
         ascentRate_m_per_min
       )
     ) {
@@ -85,22 +106,21 @@ export function calculateNDL(
     return constantDepthTensionChange(initialTensions, depth_m, t_min);
   };
 
-  const isSafe = (t_min: number): boolean => {
-    const tensions = tensionsAtBottom(t_min);
-    return canDiveSurfaceSafely(tensions, depth_m, ascentRate_m_per_min);
+  const canSurfaceDirectly = (tensions: number[]): boolean => {
+    return canAscendTo(tensions, depth_m, 0, ascentRate_m_per_min);
   };
 
-  if (isSafe(0) === false) return 0;
+  if (canSurfaceDirectly(tensionsAtBottom(0)) === false) return 0;
 
   let lo = 0;
   let hi = 1;
-  while (isSafe(hi) && hi < 10000) hi *= 2;
+  while (canSurfaceDirectly(tensionsAtBottom(hi)) && hi < 10000) hi *= 2;
 
-  if (hi >= 10000 && isSafe(10000)) return Infinity;
+  if (hi >= 10000 && canSurfaceDirectly(tensionsAtBottom(10000))) return Infinity;
 
   for (let iter = 0; iter < 50; iter++) {
     const mid = (lo + hi) / 2;
-    if (isSafe(mid)) {
+    if (canSurfaceDirectly(tensionsAtBottom(mid))) {
       lo = mid;
     } else {
       hi = mid;
@@ -144,7 +164,7 @@ export function calculateDecoStops(
   let tensions = [...endBottomTensions];
   let currentDepth = bottomDepth_m;
 
-  if (canDiveSurfaceSafely(tensions, bottomDepth_m, ascentRate_m_per_min)) {
+  if (canAscendTo(tensions, bottomDepth_m, 0, ascentRate_m_per_min)) {
     return stops;
   }
 
@@ -181,10 +201,7 @@ export function calculateDecoStops(
       );
     }
 
-    if (
-      stops.length > 0 &&
-      canDiveSurfaceSafely(tensions, currentDepth, ascentRate_m_per_min)
-    ) {
+    if (canAscendTo(tensions, currentDepth, 0, ascentRate_m_per_min)) {
       break;
     }
   }
@@ -197,32 +214,33 @@ function requiredStopDuration(
   stopDepth_m: number,
   ascentRate_m_per_min: number
 ): number {
-  if (canDiveSurfaceSafely(tensions, stopDepth_m, ascentRate_m_per_min)) {
+  const nextDepth = Math.max(
+    0,
+    Math.round((stopDepth_m - DECO_STOP_INCREMENT_m) / DECO_STOP_INCREMENT_m) *
+      DECO_STOP_INCREMENT_m
+  );
+
+  if (canAscendTo(tensions, stopDepth_m, nextDepth, ascentRate_m_per_min)) {
     return 0;
   }
-
-  const leadingIdx = leadingCompartmentIndex(tensions, stopDepth_m);
-  const comp = BUHLMANN_ZHL16C[leadingIdx];
-  const k = compartmentK(comp.halfLife_min);
-  const P_alv = ambientN2Pressure(stopDepth_m);
 
   let lo = 0;
   let hi = 1;
   const isOk = (t: number): boolean => {
     const newTensions = constantDepthTensionChange(tensions, stopDepth_m, t);
-    return canDiveSurfaceSafely(newTensions, stopDepth_m, ascentRate_m_per_min);
+    return canAscendTo(newTensions, stopDepth_m, nextDepth, ascentRate_m_per_min);
   };
 
-  while (!isOk(hi) && hi < 1000) hi *= 2;
-  if (hi >= 1000 && !isOk(1000)) return 60;
+  while (!isOk(hi) && hi < 60) hi *= 2;
+  if (hi >= 60 && !isOk(60)) return Math.ceil(hi / 2);
 
-  for (let iter = 0; iter < 40; iter++) {
+  for (let iter = 0; iter < 25; iter++) {
     const mid = (lo + hi) / 2;
     if (isOk(mid)) hi = mid;
     else lo = mid;
   }
 
-  return Math.ceil((lo + hi) / 2);
+  return Math.max(1, Math.ceil((lo + hi) / 2));
 }
 
 export function addSafetyStopIfNeeded(

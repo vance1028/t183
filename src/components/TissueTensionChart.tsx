@@ -10,9 +10,7 @@ import {
   Legend,
 } from 'recharts';
 import { useDiveStore } from '../store/useDiveStore';
-import { BUHLMANN_ZHL16C } from '../core/tissueModel';
-import { depthToPressure, calculateMValue } from '../core/tissueModel';
-import { SURFACE_PRESSURE_bar } from '../core/types';
+import { BUHLMANN_ZHL16C, calculateMValue } from '../core';
 
 const COMPARTMENT_COLORS = [
   '#ef4444', '#f97316', '#f59e0b', '#eab308', '#84cc16',
@@ -24,7 +22,6 @@ const COMPARTMENT_COLORS = [
 interface TensionPoint {
   time: number;
   depth: number;
-  mValue: number;
   [key: string]: number;
 }
 
@@ -39,26 +36,22 @@ export function TissueTensionChart() {
 
   const { chartData, maxY } = useMemo(() => {
     const points: TensionPoint[] = [];
-    let maxTension = SURFACE_PRESSURE_bar;
+    let maxTension = 1.0;
 
     result.profile.forEach((p) => {
       const point: TensionPoint = {
         time: Number(p.time_min.toFixed(2)),
         depth: Number(p.depth_m.toFixed(1)),
-        mValue: 0,
       };
 
-      const ambientPressure = depthToPressure(p.depth_m);
-      let maxM = 0;
-
       p.tissueTensions_bar.forEach((tension, ci) => {
-        const m = calculateMValue(ci, ambientPressure);
-        if (m > maxM) maxM = m;
+        const m = calculateMValue(ci, p.depth_m);
+        point[`m${ci}`] = Number(m.toFixed(3));
         if (tension > maxTension) maxTension = tension;
+        if (m > maxTension) maxTension = m;
         point[`c${ci}`] = Number(tension.toFixed(3));
       });
 
-      point.mValue = Number(maxM.toFixed(3));
       points.push(point);
     });
 
@@ -68,10 +61,13 @@ export function TissueTensionChart() {
     };
   }, [result.profile]);
 
-  const handleLegendClick = (data: any) => {
-    if (data.dataKey === 'mValue') return;
-    setSelectedKey(selectedKey === data.dataKey ? null : data.dataKey);
+  const handleLegendClick = (data: { dataKey?: unknown }) => {
+    const key = String(data.dataKey ?? '');
+    if (key.startsWith('m')) return;
+    setSelectedKey(selectedKey === key ? null : key);
   };
+
+  const selectedCi = selectedKey ? parseInt(selectedKey.replace('c', '')) : null;
 
   return (
     <div className="bg-slate-800/60 rounded-xl border border-slate-700 p-4">
@@ -101,8 +97,8 @@ export function TissueTensionChart() {
           最快舱 (4 分钟)
         </span>
         <span className="flex items-center gap-1">
-          <span className="w-3 h-0.5 bg-cyan-400 rounded" />
-          M 值极限
+          <span className="w-3 h-0.5 bg-cyan-400 rounded" style={{ borderStyle: 'dashed' }} />
+          M 值极限{selectedCi !== null ? ` (舱 ${selectedCi + 1})` : ''}
         </span>
         <span className="text-slate-500">点击图例高亮单条曲线</span>
       </div>
@@ -149,11 +145,19 @@ export function TissueTensionChart() {
                 overflowY: 'auto',
               }}
               labelStyle={{ color: '#94a3b8' }}
-              formatter={(value: number, name: string) => {
-                if (name === 'mValue') return [`${value} bar`, 'M 值上限'];
+              formatter={(value: number, name: string, props?: { payload?: Record<string, number> }) => {
+                if (name.startsWith('m')) {
+                  const ci = parseInt(name.replace('m', ''));
+                  return [`${value} bar`, `M值上限 舱${ci + 1}`];
+                }
                 const ci = parseInt(name.replace('c', ''));
                 const compartment = BUHLMANN_ZHL16C[ci];
-                return [`${value} bar`, `舱 ${ci + 1} (t½=${compartment.halfLife_min}分)`];
+                const currentPayload = props?.payload || {};
+                const mVal = currentPayload[`m${ci}`];
+                return [
+                  `${value} bar${mVal ? ` / M=${mVal}` : ''}`,
+                  `舱 ${ci + 1} (t½=${compartment.halfLife_min}分)`,
+                ];
               }}
               labelFormatter={(label) => {
                 const pt = chartData.find((d) => d.time === label);
@@ -164,13 +168,14 @@ export function TissueTensionChart() {
               onClick={handleLegendClick}
               wrapperStyle={{ fontSize: 11, cursor: 'pointer' }}
               formatter={(value) => {
-                if (value === 'mValue') return <span className="text-slate-300">M值极限</span>;
-                const ci = parseInt((value as string).replace('c', ''));
+                const str = value as string;
+                if (str.startsWith('m')) return null;
+                const ci = parseInt(str.replace('c', ''));
                 return (
                   <span
                     style={{
-                      color: selectedKey && selectedKey !== value ? '#475569' : COMPARTMENT_COLORS[ci],
-                      fontWeight: selectedKey === value ? 'bold' : 'normal',
+                      color: selectedKey && selectedKey !== str ? '#475569' : COMPARTMENT_COLORS[ci],
+                      fontWeight: selectedKey === str ? 'bold' : 'normal',
                     }}
                   >
                     舱{ci + 1}(t½={BUHLMANN_ZHL16C[ci].halfLife_min}分)
@@ -178,15 +183,17 @@ export function TissueTensionChart() {
                 );
               }}
             />
-            <Line
-              type="monotone"
-              dataKey="mValue"
-              stroke="#22d3ee"
-              strokeWidth={2}
-              strokeDasharray="5 3"
-              dot={false}
-              isAnimationActive={false}
-            />
+            {selectedCi !== null && (
+              <Line
+                type="monotone"
+                dataKey={`m${selectedCi}`}
+                stroke="#22d3ee"
+                strokeWidth={2}
+                strokeDasharray="5 3"
+                dot={false}
+                isAnimationActive={false}
+              />
+            )}
             {compartmentsToShow.map((ci) => (
               <Line
                 key={ci}

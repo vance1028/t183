@@ -60,11 +60,11 @@ export const storage = {
             reject(new Error('无效的潜水计划文件格式'));
             return;
           }
-          parsed.segments = parsed.segments.map((s: any) => ({
+          parsed.segments = parsed.segments.map((s: Partial<DiveSegment>) => ({
             targetDepth_m: Number(s.targetDepth_m) || 0,
             bottomTime_min: Number(s.bottomTime_min) || 0,
             surfaceInterval_min: Number(s.surfaceInterval_min) || 0,
-          })) as DiveSegment[];
+          }));
           resolve(parsed as DivePlan);
         } catch {
           reject(new Error('无法解析 JSON 文件'));

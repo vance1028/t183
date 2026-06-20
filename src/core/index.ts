@@ -1,5 +1,4 @@
 import {
-  DiveSegment,
   DivePlan,
   ProfilePoint,
   DecoStop,
@@ -8,7 +7,6 @@ import {
   CalculationResult,
   DESCENT_RATE_m_per_min,
   SAFE_ASCENT_RATE_RECREATIONAL_m_per_min,
-  ProfilePhase,
 } from './types';
 import {
   initialSurfaceTensions,
@@ -372,6 +370,21 @@ export function calculateDivePlan(plan: DivePlan): CalculationResult {
 }
 
 export * from './types';
-export * from './tissueModel';
+export {
+  BUHLMANN_ZHL16C,
+  NUM_COMPARTMENTS,
+  depthToPressure,
+  pressureToDepth,
+  ambientN2Pressure,
+  initialSurfaceTensions,
+  compartmentK,
+  schreinerEquation,
+  constantDepthTensionChange,
+  linearDepthChangeTensions,
+  calculateMValue,
+  compartmentSuperSaturationRatio,
+  leadingCompartmentIndex,
+  overallGasLoad,
+} from './tissueModel';
 export * from './ndlCalculator';
 export * from './ascentValidator';
